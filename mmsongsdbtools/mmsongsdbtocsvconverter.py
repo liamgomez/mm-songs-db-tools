@@ -7,6 +7,7 @@ import os
 
 import hdf5_getters
 
+from pprint import pprint
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,8 @@ class MMSongsDbToCsvConverter(object):
         converter = MMSongsDbToCsvConverter('mmsongsdb.csv', ['artist_name', 'tempo'])
         converter.convert_directory('.')
     """
-    def __init__(self, csv_filename, attrs_to_save=None):
-        self.csv_filename = csv_filename
+    def __init__(self, output_path, attrs_to_save=None):
+        self.output_path = output_path
         self.attrs_to_save = attrs_to_save
         self.getters = None
 
@@ -63,6 +64,7 @@ class MMSongsDbToCsvConverter(object):
         """
         if not os.path.exists(directory):
             raise Exception("Directory %s doesn't exist, are you sure this is what you're looking for?" % directory)
+
         self.dirnames_seen.add(directory)
         for root, dirnames, filenames in os.walk(directory):
             filenames = filter(lambda filename: filename.endswith('.h5'),
@@ -71,12 +73,16 @@ class MMSongsDbToCsvConverter(object):
                         root,
                         len(filenames))
             for filename in sorted(filenames):
-                self._handle_h5_file(os.path.join(root, filename))
+                trackid = os.path.splitext(filename)[0]
+                destination_path = os.path.join(self.output_path, os.path.relpath(root, self.base_dir))
+                if not os.path.exists(destination_path):
+                    os.makedirs(destination_path)
+                with open(os.path.join(destination_path, trackid) + ".csv", 'w') as self.fp:
+                    self.writer = csv.writer(self.fp)
+                    self._handle_h5_file(os.path.join(root, filename))
             dirnames = [os.path.join(root, dirname) for dirname in dirnames]
             dirnames = filter(lambda dirname: dirname not in self.dirnames_seen,
                               dirnames)
-            for dirname in sorted(dirnames):
-                self._convert_directory(dirname)
 
     def convert_directory(self, directory):
         """External function
@@ -86,11 +92,12 @@ class MMSongsDbToCsvConverter(object):
             - close ish down when we're done
             - report how we did when we're done
         """
+
         logger.info("Running MMSongsDbToCsvConverter on %s - saving to %s",
                     directory,
-                    self.csv_filename)
+                    self.output_path)
+        self.base_dir = directory
         self.dirnames_seen = set()
-        with open(self.csv_filename, 'w') as self.fp:
-            self.writer = csv.writer(self.fp)
-            self._convert_directory(directory)
+
+        self._convert_directory(directory)
         logger.info("%s dirnames seen", len(self.dirnames_seen))
