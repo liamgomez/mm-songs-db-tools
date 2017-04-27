@@ -4,6 +4,7 @@ import csv
 import json
 import logging
 import os
+import locale
 
 import hdf5_getters
 
@@ -24,6 +25,7 @@ class MMSongsDbToCsvConverter(object):
         self.output_path = output_path
         self.attrs_to_save = attrs_to_save
         self.getters = None
+        self.conversion_complete = 0
 
     def _get_getters(self, h5):
         all_getters = filter(lambda key: key[:4] == 'get_' and key != 'get_num_songs',
@@ -67,11 +69,15 @@ class MMSongsDbToCsvConverter(object):
 
         self.dirnames_seen.add(directory)
         for root, dirnames, filenames in os.walk(directory):
-            filenames = filter(lambda filename: filename.endswith('.h5'),
-                               filenames)
-            logger.info("_convert_directory() for dir %s with %s h5 files...",
-                        root,
-                        len(filenames))
+            dirnames.sort()
+            filenames.sort()
+
+            filenames = filter(lambda filename: filename.endswith('.h5'), filenames)
+
+            self.conversion_complete += len(filenames) 
+            count_string = "{:,}".format(self.conversion_complete)
+            logger.info("_convert_directory() for dir %s with %s h5 files... Total converted: %s", root, len(filenames), count_string)
+
             for filename in sorted(filenames):
                 trackid = os.path.splitext(filename)[0]
                 destination_path = os.path.join(self.output_path, os.path.relpath(root, self.base_dir))
@@ -80,9 +86,9 @@ class MMSongsDbToCsvConverter(object):
                 with open(os.path.join(destination_path, trackid) + ".csv", 'w') as self.fp:
                     self.writer = csv.writer(self.fp)
                     self._handle_h5_file(os.path.join(root, filename))
+
             dirnames = [os.path.join(root, dirname) for dirname in dirnames]
-            dirnames = filter(lambda dirname: dirname not in self.dirnames_seen,
-                              dirnames)
+            dirnames = filter(lambda dirname: dirname not in self.dirnames_seen, dirnames)
 
     def convert_directory(self, directory):
         """External function
